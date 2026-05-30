@@ -113,7 +113,7 @@ func _on_start_game_impl():
 	NetworkManager.show_loading()
 	_start_game.rpc()
 	await get_tree().create_timer(0.3).timeout
-	get_tree().change_scene_to_file("res://scenes/game.tscn")
+	SceneManager.change_scene_instant("res://scenes/game.tscn")
 
 @rpc("any_peer", "call_remote", "reliable")
 func _toggle_ready(peer_id: int, ready: bool):
@@ -178,4 +178,4 @@ func _start_game():
 	print("Client: received start signal, loading game...")
 	NetworkManager.show_loading()
 	await get_tree().create_timer(0.3).timeout
-	get_tree().change_scene_to_file("res://scenes/game.tscn")
+	SceneManager.change_scene_instant("res://scenes/game.tscn")

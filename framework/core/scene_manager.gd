@@ -23,14 +23,14 @@ var _overlay: CanvasLayer = null
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 
-func change_scene(scene_path: String, params: Dictionary = {}, transition: Transition = Transition.FADE) -> void:
+func change_scene(scene_path: String, params: Dictionary = {}, transition: Transition = Transition.FADE, _skip_history: bool = false) -> void:
 	if _loading_in_progress:
 		push_warning("SceneManager: already loading a scene")
 		return
 	_loading_in_progress = true
 	scene_change_started.emit()
 
-	if not _current_scene_data.is_empty():
+	if not _skip_history and not _current_scene_data.is_empty():
 		_scene_history.append(_current_scene_data.duplicate())
 		if _scene_history.size() > _max_history:
 			_scene_history.pop_front()
@@ -110,7 +110,7 @@ func go_back(transition: Transition = Transition.FADE) -> void:
 		push_warning("SceneManager: no scene history to go back to")
 		return
 	var prev = _scene_history.pop_back()
-	change_scene(prev.path, prev.params, transition)
+	change_scene(prev.path, prev.params, transition, true)
 
 func restart_scene() -> void:
 	if _current_scene_data.is_empty():

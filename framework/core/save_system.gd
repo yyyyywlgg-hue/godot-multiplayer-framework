@@ -127,7 +127,8 @@ func _load_from_disk() -> bool:
 		return false
 	_data = parsed
 	_dirty = false
-	load_completed.emit("")
+	for section in _data:
+		load_completed.emit(section)
 	return true
 
 func _write_to_disk() -> bool:
