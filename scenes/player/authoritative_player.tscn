@@ -1,0 +1,24 @@
+[gd_scene load_steps=5 format=3 uid="uid://authplayer001"]
+
+[ext_resource type="Script" path="res://scripts/authoritative_player.gd" id="1_auth_player"]
+[ext_resource type="Script" path="res://scripts/player_input.gd" id="2_input"]
+[ext_resource type="PackedScene" uid="uid://charactermodel001" path="res://scenes/player/character_model.tscn" id="3_character"]
+
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_auth"]
+radius = 0.35
+height = 2.8
+
+[node name="AuthoritativePlayer" type="CharacterBody3D"]
+script = ExtResource("1_auth_player")
+
+[node name="CharacterModel" parent="." instance=ExtResource("3_character")]
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.4, 0)
+shape = SubResource("CapsuleShape3D_auth")
+
+[node name="PlayerInput" type="Node" parent="."]
+script = ExtResource("2_input")
+
+[node name="Camera3D" type="Camera3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3, 10)

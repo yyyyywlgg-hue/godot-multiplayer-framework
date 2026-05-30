@@ -1,0 +1,51 @@
+[gd_scene load_steps=2 format=3 uid="uid://steammenu001"]
+
+[ext_resource type="Script" path="res://scripts/menus/steam_menu.gd" id="1_steam_menu"]
+
+[node name="SteamMenu" type="Control" node_paths=PackedStringArray("host_button", "client_button", "steam_id_input", "back_button", "status_label")]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="VBoxContainer" type="VBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -150.0
+offset_top = -120.0
+offset_right = 150.0
+offset_bottom = 120.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="TitleLabel" type="Label" parent="VBoxContainer"]
+layout_mode = 2
+text = "Steam Multiplayer"
+horizontal_alignment = 1
+
+[node name="StatusLabel" type="Label" parent="VBoxContainer"]
+layout_mode = 2
+text = "Ensure Steam is running and the GDExtension is loaded."
+autowrap_mode = 2
+
+[node name="SteamIDInput" type="LineEdit" parent="VBoxContainer"]
+layout_mode = 2
+placeholder_text = "Host Steam ID (for client)"
+
+[node name="HostButton" type="Button" parent="VBoxContainer"]
+layout_mode = 2
+text = "Host Game (Steam)"
+
+[node name="ClientButton" type="Button" parent="VBoxContainer"]
+layout_mode = 2
+text = "Join Game (Steam)"
+
+[node name="BackButton" type="Button" parent="VBoxContainer"]
+layout_mode = 2
+text = "Back"

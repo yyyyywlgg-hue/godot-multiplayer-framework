@@ -1,0 +1,21 @@
+# Godot
+.godot/
+*.uid
+.import/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Build
+builds/
+export_presets.cfg
+
+# Other projects in parent directory
+/godot-monke-net-main/
+/steam-multiplayer-peer-main/
+/godot-3d-multiplayer-template-master/

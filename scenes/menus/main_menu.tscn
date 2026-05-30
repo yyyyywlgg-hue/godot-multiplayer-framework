@@ -1,0 +1,103 @@
+[gd_scene format=3 uid="uid://ffncciksi1tw"]
+
+[ext_resource type="Script" uid="uid://b6qufx7v8n2t7" path="res://scripts/menus/main_menu.gd" id="1_1dabp"]
+[ext_resource type="Theme" uid="uid://giidcej8oij7" path="res://asssets/ui/menu_theme.tres" id="2_b784e"]
+[ext_resource type="Texture2D" uid="uid://yli35jpr7rkb" path="res://asssets/ui/menu-bg.jpg" id="2_yqvau"]
+
+[node name="MainMenu" type="Control" unique_id=1909631030 node_paths=PackedStringArray("host_game_button", "join_game_button", "direct_ip_button")]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme = ExtResource("2_b784e")
+script = ExtResource("1_1dabp")
+host_game_button = NodePath("Menu/CreateRoom")
+join_game_button = NodePath("Menu/JoinRoom")
+direct_ip_button = NodePath("Menu/DirectIP")
+
+[node name="Panel" type="Panel" parent="." unique_id=1021276437]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="MenuBackground" type="TextureRect" parent="Panel" unique_id=1228029353]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+texture = ExtResource("2_yqvau")
+expand_mode = 2
+
+[node name="Menu" type="Panel" parent="." unique_id=536221236]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Title" type="Label" parent="Menu" unique_id=1359095436]
+layout_mode = 0
+offset_left = 60.0
+offset_top = 20.0
+offset_right = 400.0
+offset_bottom = 70.0
+theme_override_font_sizes/font_size = 32
+text = "3D Multiplayer"
+
+[node name="Exit" type="Button" parent="Menu" unique_id=1663724391]
+layout_mode = 1
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -210.0
+offset_top = 52.0
+offset_right = -39.0
+offset_bottom = 103.0
+grow_horizontal = 0
+theme_override_font_sizes/font_size = 48
+text = "Exit"
+flat = true
+
+[node name="CreateRoom" type="Button" parent="Menu" unique_id=1832171810]
+custom_minimum_size = Vector2(220, 0)
+layout_mode = 0
+offset_left = 60.0
+offset_top = 80.0
+offset_right = 320.0
+offset_bottom = 140.0
+theme_override_font_sizes/font_size = 24
+text = "Create Room"
+flat = true
+
+[node name="JoinRoom" type="Button" parent="Menu" unique_id=2072427660]
+layout_mode = 0
+offset_left = 55.0
+offset_top = 155.0
+offset_right = 315.0
+offset_bottom = 215.0
+theme_override_font_sizes/font_size = 24
+text = "Join Room"
+flat = true
+
+[node name="DirectIP" type="Button" parent="Menu" unique_id=445885513]
+layout_mode = 0
+offset_left = 55.0
+offset_top = 230.0
+offset_right = 315.0
+offset_bottom = 290.0
+theme_override_font_sizes/font_size = 24
+text = "Direct IP"
+flat = true
+
+[connection signal="pressed" from="Menu/Exit" to="." method="exit_game"]
+[connection signal="pressed" from="Menu/CreateRoom" to="." method="create_room"]
+[connection signal="pressed" from="Menu/JoinRoom" to="." method="join_room"]
+[connection signal="pressed" from="Menu/DirectIP" to="." method="direct_ip"]

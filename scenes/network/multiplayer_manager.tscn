@@ -1,0 +1,8 @@
+[gd_scene load_steps=3 format=3 uid="uid://btjx4a4g25xj3"]
+
+[ext_resource type="Script" path="res://scripts/network/multiplayer_manager.gd" id="1_4g30v"]
+[ext_resource type="PackedScene" path="res://scenes/player/authoritative_player.tscn" id="2_auth_player"]
+
+[node name="MultiplayerManager" type="Node" node_paths=PackedStringArray("_player_spawn_point")]
+script = ExtResource("1_4g30v")
+_authoritative_player_scene = ExtResource("2_auth_player")
