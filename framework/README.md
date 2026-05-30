@@ -10,7 +10,8 @@
 - **存档系统** — JSON 持久化、分区存储、多存档槽位、自动保存、类型校验
 - **事件总线** — 跨模块零耦合通信、类型校验、订阅者安全隔离
 - **调试快捷键** — Ctrl+Shift 修饰键防冲突、暂停/逐帧/加速/状态面板，Release 自动移除
-- **动画状态机** — 本地输入驱动 + 远程同步状态驱动，自动切换
+- **状态机** — 通用 StateMachine + State 基类，支持转换表、状态栈、state_changed 信号
+- **动画状态机** — 本地输入驱动 + 远程同步状态驱动，走同一个状态机
 
 ## 目录结构
 
@@ -20,6 +21,8 @@
 │       ├── scene_manager.gd       # 场景管理器
 │       ├── save_system.gd         # 存档系统
 │       ├── event_bus.gd           # 事件总线
+│       ├── state_machine.gd       # 通用状态机
+│       ├── state.gd               # 状态基类
 │       └── debug_shortcuts.gd     # 调试快捷键
 │
 ├── scripts/                       # 框架网络模块（不需要修改）
@@ -70,6 +73,7 @@
 │   SceneManager (场景切换 + 过渡动画 + 参数传递)           │
 │   SaveSystem (JSON 持久化 + 多槽位 + 自动保存)           │
 │   EventBus (跨模块事件通信 + 类型校验)                   │
+│   StateMachine + State (通用状态机 + 转换表 + 状态栈)     │
 │   DebugShortcuts (调试工具 + Release 自动移除)           │
 │                                                         │
 │   全局单例: NetworkManager, SceneManager,                │
@@ -239,6 +243,73 @@ func _on_player_died(_data):
 
 ---
 
+### StateMachine — 通用状态机
+
+独立的通用状态机组件，支持转换约束、状态栈和状态变化通知。可同时用于动画状态和游戏逻辑状态。
+
+```gdscript
+# 创建状态机
+var sm = StateMachine.new()
+add_child(sm)
+
+# 添加状态
+sm.add_state(MyIdleState.new())
+sm.add_state(MyWalkState.new())
+sm.add_state(MyAttackState.new())
+
+# 定义合法转换（不定义则允许任意转换）
+sm.add_transition(&"idle", &"walk")
+sm.add_transition(&"walk", &"idle")
+sm.add_transition(&"idle", &"attack")
+sm.add_transition(&"attack", &"idle")
+
+# 初始化
+sm.force_transition(&"idle")
+
+# 带约束转换（不合法会返回 false）
+sm.transition(&"walk")
+
+# 强制转换（忽略约束）
+sm.force_transition(&"idle")
+
+# 状态栈（暂停/恢复场景）
+sm.push(&"menu")    # 当前状态压栈，切到 menu
+sm.pop()            # 恢复到压栈前的状态
+
+# 查询
+sm.current_state_name()    # 当前状态名
+sm.is_in_state(&"idle")    # 是否在某个状态
+sm.can_transition(&"walk") # 能否转换
+
+# 监听状态变化
+sm.state_changed.connect(func(from, to):
+    print("状态从 %s 变为 %s" % [from, to])
+)
+```
+
+**State 基类** — 继承并覆写 `enter/exit/update`：
+
+```gdscript
+class MyIdleState extends State:
+    func _init():
+        state_name = &"idle"
+    func enter():
+        play_animation("idle")
+    func update(delta):
+        if is_moving():
+            transition_to(&"walk")
+```
+
+**状态栈** — 适用于菜单覆盖、暂停恢复等场景：
+
+```
+当前: idle → push("pause") → 当前: pause
+                                   ↓ pop()
+                              当前: idle（恢复）
+```
+
+---
+
 ### DebugShortcuts — 调试快捷键
 
 开发期调试工具，默认需要 `Ctrl+Shift` 修饰键防止与游戏输入冲突，Release 构建自动移除。
@@ -324,7 +395,7 @@ var player = MultiplayerManager.get_player(peer_id)
 
 ### AuthoritativePlayer — 权威玩家基类
 
-服务端执行物理，客户端 lerp 同步位置。提供 `_on_physics_tick` 钩子供子类扩展。
+服务端执行物理，客户端 lerp 同步位置。内置游戏逻辑状态机（alive/dead），提供 `_on_physics_tick` 钩子供子类扩展。
 
 ```gdscript
 # 继承扩展游戏逻辑
@@ -340,6 +411,13 @@ func _on_physics_tick(delta):       # 覆写钩子
 
 func _do_attack():
     pass
+
+# 使用游戏逻辑状态机
+func die():
+    _game_sm.transition(&"dead")
+
+func respawn():
+    _game_sm.transition(&"alive")
 ```
 
 **可覆写的属性和方法**：
@@ -354,6 +432,8 @@ func _do_attack():
 | `get_effective_velocity()` | 获取速度（服务端真实/客户端同步） |
 | `get_effective_is_on_floor()` | 获取地面状态 |
 | `get_effective_is_running()` | 获取跑步状态 |
+| `get_game_state_name()` | 获取当前游戏逻辑状态名 |
+| `_game_sm` | 游戏逻辑状态机实例（alive/dead，可扩展） |
 
 ---
 
@@ -380,10 +460,18 @@ func _do_attack():
 
 ### CharacterModel — 动画状态机
 
-根据本地/远程自动选择动画驱动方式。
+基于通用 StateMachine 实现的动画状态机，本地和远程走同一个状态机，只是驱动源不同。
 
-**本地玩家**：输入驱动状态机（Idle → Walk → Run → Jump）
-**远程玩家**：同步数据驱动（根据 velocity + is_on_floor + is_running 判断动画）
+**本地玩家**：`drive_from_input()` — 输入驱动状态转换（Idle → Walk → Run → Jump）
+**远程玩家**：`drive_from_synced_state()` — 同步数据驱动状态转换
+
+**转换约束**：
+
+```
+idle ↔ walk ↔ run
+  ↕       ↕       ↕
+  └───────jump──────┘
+```
 
 **远程动画判断逻辑**：
 

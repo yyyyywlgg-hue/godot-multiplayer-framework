@@ -3,7 +3,6 @@ extends Node3D
 
 const TURN_SPEED: float = 12.0
 
-# Animation name mapping - BaseCharacter uses "CharacterArmature|" prefix
 const ANIM_MAP: Dictionary = {
 	"idle": "CharacterArmature|Idle",
 	"walk": "CharacterArmature|Walk",
@@ -11,87 +10,66 @@ const ANIM_MAP: Dictionary = {
 	"jump": "CharacterArmature|PickUp",
 }
 
-class State:
-	var model: CharacterModel
-	func enter(): pass
-	func exit(): pass
-	func update(_delta: float): pass
-
-	func _play(anim_key: String, loop: bool, speed: float) -> void:
-		var anim_name: String = ANIM_MAP.get(anim_key, "")
-		if anim_name == "":
-			return
-		if model._anim_player == null or not model._anim_player.has_animation(anim_name):
-			return
-		model._anim_player.play(anim_name, -1, speed)
-		if model._anim_player.is_playing():
-			model._anim_player.get_animation(anim_name).loop_mode = Animation.LOOP_LINEAR if loop else Animation.LOOP_NONE
-
-	func _transition_from_input(moving: bool, running: bool) -> void:
-		if model._jump_pressed():
-			model._change_state(StateType.JUMP)
-		elif running and moving:
-			model._change_state(StateType.RUN)
-		elif moving:
-			model._change_state(StateType.WALK)
-		else:
-			model._change_state(StateType.IDLE)
-
-class IdleState extends State:
-	func enter(): _play("idle", true, 1.0)
-	func update(_delta: float) -> void:
-		_transition_from_input(model._is_moving(), model._is_running())
-
-class WalkState extends State:
-	func enter(): _play("walk", true, 0.8)
-	func update(_delta: float) -> void:
-		_transition_from_input(model._is_moving(), model._is_running())
-
-class RunState extends State:
-	func enter(): _play("run", true, 1.2)
-	func update(_delta: float) -> void:
-		_transition_from_input(model._is_moving(), model._is_running())
-
-class JumpState extends State:
-	func enter():
-		model._jumping = true
-		if not model._anim_player.animation_finished.is_connected(model._on_jump_done):
-			model._anim_player.animation_finished.connect(model._on_jump_done, CONNECT_ONE_SHOT)
-		_play("jump", false, 1.0)
-	func update(_delta: float) -> void:
-		if not model._jumping:
-			_transition_from_input(model._is_moving(), model._is_running())
-
-enum StateType { IDLE, WALK, RUN, JUMP }
-
-var _anim_player: AnimationPlayer
-var _states: Dictionary = {}
-var _current: State
-var _jumping: bool = false
-var _remote_anim: String = ""
-
 const FORWARD: String = "forward"
 const BACKWARD: String = "backward"
 const LEFT: String = "left"
 const RIGHT: String = "right"
 const RUN_ACTION: String = "run"
 
+var _anim_player: AnimationPlayer
+var _machine: StateMachine
+var _is_local_player: bool = false
+
 func _ready() -> void:
 	await get_tree().process_frame
 	_setup_animation()
-	_setup_states()
-	_change_state(StateType.IDLE)
+	_setup_state_machine()
 
 func _process(delta: float) -> void:
 	_update_rotation(delta)
-	if _is_local():
-		if _current:
-			_current.update(delta)
-	else:
-		_update_remote_animation()
+
+func setup_local() -> void:
+	_is_local_player = true
+
+func setup_remote() -> void:
+	_is_local_player = false
+
+func drive_from_input() -> void:
+	if not _is_local_player:
+		return
+	if _machine and _machine.current_state():
+		_machine.current_state().update(get_process_delta_time())
+
+func drive_from_synced_state(moving: bool, running: bool, on_floor: bool) -> void:
+	if _is_local_player:
+		return
+	if not _machine:
+		return
+	var current = _machine.current_state()
+	if current == null:
+		return
+	var target: StringName = &"idle"
+	if not on_floor:
+		target = &"jump"
+	elif running and moving:
+		target = &"run"
+	elif moving:
+		target = &"walk"
+	if _machine.current_state_name() != target:
+		_machine.force_transition(target)
+
+func play_animation(anim_key: String, loop: bool, speed: float) -> void:
+	var anim_name: String = ANIM_MAP.get(anim_key, "")
+	if anim_name == "" or _anim_player == null:
+		return
+	if not _anim_player.has_animation(anim_name):
+		return
+	_anim_player.play(anim_name, -1, speed)
+	if _anim_player.is_playing():
+		_anim_player.get_animation(anim_name).loop_mode = Animation.LOOP_LINEAR if loop else Animation.LOOP_NONE
 
 func _update_rotation(delta: float) -> void:
-	if _is_local():
+	if _is_local_player:
 		var direction := Vector3(
 			Input.get_axis(LEFT, RIGHT),
 			0.0,
@@ -106,12 +84,6 @@ func _update_rotation(delta: float) -> void:
 			return
 		rotation.y = lerp_angle(rotation.y, atan2(vel.x, vel.z), TURN_SPEED * delta)
 
-func _is_local() -> bool:
-	var p = get_parent()
-	if not (p is CharacterBody3D):
-		return false
-	return str(p.name) == str(multiplayer.get_unique_id())
-
 func _is_moving() -> bool:
 	return Vector2(
 		Input.get_axis(LEFT, RIGHT),
@@ -122,12 +94,9 @@ func _is_running() -> bool:
 	return Input.is_action_pressed(RUN_ACTION)
 
 func _jump_pressed() -> bool:
-	if not _is_local():
+	if not _is_local_player:
 		return false
-	return Input.is_action_just_pressed("jump") and not _jumping
-
-func _on_jump_done(_name: String) -> void:
-	_jumping = false
+	return Input.is_action_just_pressed("jump")
 
 func _get_parent_velocity() -> Vector3:
 	var p = get_parent()
@@ -147,70 +116,41 @@ func _get_parent_is_running() -> bool:
 		return p.get_effective_is_running()
 	return false
 
-func _update_remote_animation() -> void:
-	var vel = _get_parent_velocity()
-	var on_floor = _get_parent_on_floor()
-	var is_running = _get_parent_is_running()
-	var horizontal_speed = Vector2(vel.x, vel.z).length()
+func _setup_state_machine() -> void:
+	_machine = StateMachine.new()
+	_machine.name = "AnimStateMachine"
+	add_child(_machine)
 
-	var target_key: String
-	var loop: bool
-	var speed: float
+	var idle = AnimIdleState.new()
+	var walk = AnimWalkState.new()
+	var run = AnimRunState.new()
+	var jump = AnimJumpState.new()
 
-	if not on_floor:
-		target_key = "jump"
-		loop = false
-		speed = 1.0
-	elif is_running and horizontal_speed > 0.5:
-		target_key = "run"
-		loop = true
-		speed = 1.2
-	elif horizontal_speed > 0.5:
-		target_key = "walk"
-		loop = true
-		speed = 0.8
-	else:
-		target_key = "idle"
-		loop = true
-		speed = 1.0
+	_machine.add_state(idle)
+	_machine.add_state(walk)
+	_machine.add_state(run)
+	_machine.add_state(jump)
 
-	if target_key != _remote_anim:
-		_remote_anim = target_key
-		_play_direct(target_key, loop, speed)
+	_machine.add_transition(&"idle", &"walk")
+	_machine.add_transition(&"idle", &"run")
+	_machine.add_transition(&"idle", &"jump")
+	_machine.add_transition(&"walk", &"idle")
+	_machine.add_transition(&"walk", &"run")
+	_machine.add_transition(&"walk", &"jump")
+	_machine.add_transition(&"run", &"idle")
+	_machine.add_transition(&"run", &"walk")
+	_machine.add_transition(&"run", &"jump")
+	_machine.add_transition(&"jump", &"idle")
+	_machine.add_transition(&"jump", &"walk")
+	_machine.add_transition(&"jump", &"run")
 
-func _play_direct(anim_key: String, loop: bool, speed: float) -> void:
-	var anim_name: String = ANIM_MAP.get(anim_key, "")
-	if anim_name == "" or _anim_player == null:
-		return
-	if not _anim_player.has_animation(anim_name):
-		return
-	_anim_player.play(anim_name, -1, speed)
-	if _anim_player.is_playing():
-		_anim_player.get_animation(anim_name).loop_mode = Animation.LOOP_LINEAR if loop else Animation.LOOP_NONE
-
-func _setup_states() -> void:
-	_states = {
-		StateType.IDLE: IdleState.new(),
-		StateType.WALK: WalkState.new(),
-		StateType.RUN: RunState.new(),
-		StateType.JUMP: JumpState.new(),
-	}
-	for s in _states.values():
-		s.model = self
-
-func _change_state(type: StateType) -> void:
-	if _current:
-		_current.exit()
-	_current = _states[type]
-	if _current:
-		_current.enter()
+	_machine.force_transition(&"idle")
 
 func _setup_animation() -> void:
 	_anim_player = _find_animation_player($CharacterMesh)
 	if _anim_player == null:
 		push_warning("CharacterModel: No AnimationPlayer found!")
 		return
-
 	var anim_names: Array = []
 	if _anim_player.has_animation_library(""):
 		anim_names.assign(_anim_player.get_animation_library("").get_animation_list())
@@ -224,3 +164,107 @@ func _find_animation_player(node: Node) -> AnimationPlayer:
 		if found:
 			return found
 	return null
+
+
+class AnimIdleState extends State:
+	func _init():
+		state_name = &"idle"
+	func enter():
+		var model = _get_model()
+		if model:
+			model.play_animation("idle", true, 1.0)
+	func update(_delta: float):
+		var model = _get_model()
+		if not model:
+			return
+		if model._jump_pressed():
+			transition_to(&"jump")
+		elif model._is_running() and model._is_moving():
+			transition_to(&"run")
+		elif model._is_moving():
+			transition_to(&"walk")
+	func _get_model() -> CharacterModel:
+		if _machine and _machine.get_parent() is CharacterModel:
+			return _machine.get_parent()
+		return null
+
+
+class AnimWalkState extends State:
+	func _init():
+		state_name = &"walk"
+	func enter():
+		var model = _get_model()
+		if model:
+			model.play_animation("walk", true, 0.8)
+	func update(_delta: float):
+		var model = _get_model()
+		if not model:
+			return
+		if model._jump_pressed():
+			transition_to(&"jump")
+		elif model._is_running() and model._is_moving():
+			transition_to(&"run")
+		elif not model._is_moving():
+			transition_to(&"idle")
+	func _get_model() -> CharacterModel:
+		if _machine and _machine.get_parent() is CharacterModel:
+			return _machine.get_parent()
+		return null
+
+
+class AnimRunState extends State:
+	func _init():
+		state_name = &"run"
+	func enter():
+		var model = _get_model()
+		if model:
+			model.play_animation("run", true, 1.2)
+	func update(_delta: float):
+		var model = _get_model()
+		if not model:
+			return
+		if model._jump_pressed():
+			transition_to(&"jump")
+		elif not model._is_running() and model._is_moving():
+			transition_to(&"walk")
+		elif not model._is_moving():
+			transition_to(&"idle")
+	func _get_model() -> CharacterModel:
+		if _machine and _machine.get_parent() is CharacterModel:
+			return _machine.get_parent()
+		return null
+
+
+class AnimJumpState extends State:
+	var _anim_done: bool = false
+
+	func _init():
+		state_name = &"jump"
+	func enter():
+		_anim_done = false
+		var model = _get_model()
+		if not model or not model._anim_player:
+			return
+		if not model._anim_player.animation_finished.is_connected(_on_anim_finished):
+			model._anim_player.animation_finished.connect(_on_anim_finished, CONNECT_ONE_SHOT)
+		model.play_animation("jump", false, 1.0)
+	func update(_delta: float):
+		if _anim_done:
+			var model = _get_model()
+			if not model:
+				return
+			if model._is_moving():
+				if model._is_running():
+					transition_to(&"run")
+				else:
+					transition_to(&"walk")
+			else:
+				transition_to(&"idle")
+	func exit():
+		_anim_done = false
+	func _on_anim_finished(_anim_name: String):
+		_anim_done = true
+	func _get_model() -> CharacterModel:
+		if _machine and _machine.get_parent() is CharacterModel:
+			return _machine.get_parent()
+		return null
